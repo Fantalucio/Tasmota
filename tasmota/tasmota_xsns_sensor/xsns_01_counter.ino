@@ -77,9 +77,13 @@ void CounterIsrArg(void *arg) {
       // restart PWM each second (german 50Hz has to up to 0.01% deviation)
       // restart initiated by setting Counter.startReSync = true;
 #ifdef USE_AC_ZERO_CROSS_DIMMER
-      if (index == 3) ACDimmerZeroCross(time);
-#endif //USE_AC_ZERO_CROSS_DIMMER
+      if (index == 3) { ACDimmerZeroCross(time); }
       return;
+#else
+      if (!Settings->flag6.counter_both_edges) {  // SetOption159 - (Counter) Enable counting on both rising and falling edge (1)
+        return;
+      }
+#endif //USE_AC_ZERO_CROSS_DIMMER
     }
   }
 
@@ -126,6 +130,40 @@ bool CounterPinState(void)
   }
   return false;
 }
+
+// is this GPIO configured as a counter
+// this encapsulates the logic and avoids exposing internals to Berry
+bool CounterPinConfigured(int32_t counter) {
+  if ((counter > 0) && (counter <= MAX_COUNTERS) && (PinUsed(GPIO_CNTR1, counter - 1))) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+// return counter value for this GPIO
+// this encapsulates the logic and avoids exposing internals to Berry
+uint32_t CounterPinRead(int32_t counter) {
+  if (CounterPinConfigured(counter)) {
+    return RtcSettings.pulse_counter[counter - 1];
+  }
+  return 0;
+}
+
+// set the value, add offset if `add` is true, return value
+// this encapsulates the logic and avoids exposing internals to Berry
+uint32_t CounterPinSet(int32_t counter, int32_t value, bool add) {
+  if (CounterPinConfigured(counter)) {
+    if (add) {
+      RtcSettings.pulse_counter[counter - 1] += value;
+    } else {
+      RtcSettings.pulse_counter[counter - 1] = value;
+    }
+    return RtcSettings.pulse_counter[counter - 1];
+  }
+  return 0;
+}
+
 
 void CounterInit(void)
 {
